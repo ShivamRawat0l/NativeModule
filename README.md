@@ -1,97 +1,136 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# NativeModule Counter
 
-# Getting Started
+This project contains a React Native counter screen implemented with a reusable `useCounter` hook. The UI is kept in `src/Counter.tsx`, while the counter behavior, state updates, history tracking, and timers are handled inside `src/useCounter.tsx`.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+The project also has a TurboModule Codegen spec in `src/specs/NativeCounter.ts`. That spec defines the native API shape for a future native `Counter` TurboModule with `getState`, `increment`, `decrement`, and `reset` methods. The current screen still uses the JavaScript hook for state management.
 
-## Step 1: Start Metro
+## Counter UI
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+`src/Counter.tsx` renders the counter value and action buttons:
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+- The current count is shown at the top.
+- The increment button is implemented with `Pressable`.
+- `onPressIn` starts repeated increments while the button is held.
+- `onPressOut` stops the repeated increment timer.
+- The decrement and reset actions use regular React Native `Button` components.
+- The history list is rendered inside a `ScrollView`.
 
-```sh
-# Using npm
-npm start
+The component does not own the counter state directly. It receives everything from `useCounter`, which keeps the UI simple and focused on rendering.
 
-# OR using Yarn
-yarn start
+## How `useCounter` Works
+
+`useCounter` is the main state-management hook for the counter feature. It exposes:
+
+```ts
+{
+  count,
+  increment,
+  decrement,
+  reset,
+  history,
+  onPressIn,
+  onPressOut,
+}
 ```
 
-## Step 2: Build and run your app
+### State
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+The hook uses React state for values that should re-render the UI:
 
-### Android
+- `count`: the current counter value.
+- `history`: an array of previous count values.
 
-```sh
-# Using npm
-npm run android
+Whenever `count` or `history` changes, React re-renders `Counter.tsx` with the latest values.
 
-# OR using Yarn
-yarn android
+### Refs
+
+The hook uses refs for mutable values that should survive re-renders but should not trigger a re-render by themselves:
+
+- `decrementTimerInterval`: stores the interval used for automatic decrementing.
+- `decrementTimerTimeout`: stores the timeout that starts auto-decrementing after a delay.
+- `resetTimer`: stores the interval used during reset.
+- `incrementCount`: tracks how many times increment has been pressed.
+- `incrementTimer`: stores the interval used while the increment button is held down.
+
+Refs are used for timer IDs because changing a timer ID is not UI state. The UI only needs to update when `count` or `history` changes.
+
+## Increment Logic
+
+Calling `increment` first resets the auto-decrement timer through `onChangeCounter`.
+
+Then the hook increments `incrementCount.current`. Every normal increment increases the counter by `1`. When the increment count reaches `SKIP_COUNT`, which is currently `5`, the counter jumps by `5` instead of `1`, and `incrementCount.current` is reset back to `0`.
+
+Before updating the count, the previous count value is added to `history`.
+
+## Long Press Increment
+
+The increment button uses `onPressIn` and `onPressOut`:
+
+- `onPressIn` starts an interval that calls `increment` every `100ms`.
+- `onPressOut` clears that interval.
+
+This creates the hold-to-increment behavior.
+
+## Decrement Logic
+
+Calling `decrement` also resets the auto-decrement timer through `onChangeCounter`.
+
+If the current count is greater than `0`, the hook:
+
+1. Adds the current count to `history`.
+2. Decreases the count by `1`.
+
+The counter is not allowed to go below `0`.
+
+## Reset Logic
+
+Calling `reset` clears the history immediately, then starts a timer that decreases the count every `2s` while the count is greater than `0`.
+
+The reset timer ID is stored in `resetTimer.current`, so it can be cleared later when the hook unmounts.
+
+## Auto-Decrement Timer
+
+Every time the user changes the counter, `onChangeCounter` is called.
+
+It does two things:
+
+1. Clears the existing auto-decrement interval.
+2. Starts a timeout that waits `2s`, then starts decrementing the counter every `1s`.
+
+This means the counter waits for the user to stop interacting before it begins automatically counting down.
+
+## History Management
+
+The `history` array stores previous counter values before changes are applied.
+
+`onAddHistory` appends the latest previous count to the history list. If the history gets longer than `20` items, it keeps only the latest entries by slicing the array before adding the new value.
+
+The history state is updated immutably with a new array each time, which allows React to detect the change and re-render the history list.
+
+## Cleanup
+
+`useEffect` returns a cleanup function that clears active intervals when the hook unmounts:
+
+- `decrementTimerInterval`
+- `resetTimer`
+
+This prevents background timers from continuing after the counter screen is removed.
+
+## TurboModule Spec
+
+`src/specs/NativeCounter.ts` defines the TypeScript contract for a native TurboModule named `Counter`.
+
+It declares:
+
+```ts
+export interface Spec extends TurboModule {
+  getState(): number;
+  increment(): void;
+  decrement(): voidk;
+  reset(): void;
+}
 ```
 
-### iOS
+`package.json` also includes `codegenConfig`, which tells React Native Codegen where to find the spec and which Android package should contain the generated native module bindings.
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
-
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
-bundle install
-```
-
-Then, and every time you update your native dependencies, run:
-
-```sh
-bundle exec pod install
-```
-
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
-
-```sh
-# Using npm
-npm run ios
-
-# OR using Yarn
-yarn ios
-```
-
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
-
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
-
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+At the moment, the hook is still managing the live counter state in JavaScript. The TurboModule spec is the contract needed to move the counter logic into native code later.
