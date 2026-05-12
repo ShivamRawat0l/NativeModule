@@ -1,13 +1,39 @@
 import { Button, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useCounter } from './useCounter';
+import NativeCounter from './specs/NativeCounter';
+import { useState } from 'react';
 
 function Counter() {
     const { count, decrement, reset, history, onPressIn, onPressOut } = useCounter();
 
+    const [nativeCounter, setNativeCounter] = useState(() => NativeCounter.getState());
+
+    const onNativeIncrement = () => {
+        setNativeCounter(NativeCounter.increment());
+    };
+    const onNativeDecrement = () => {
+        setNativeCounter(NativeCounter.decrement());
+    };
+    const onNativeReset = () => {
+        setNativeCounter(NativeCounter.reset());
+    };
+
     return (
         <SafeAreaProvider>
             <SafeAreaView style={styles.container}>
+                <View>
+                    <Text style={styles.text}>{nativeCounter}</Text>
+                    <Pressable onPress={onNativeIncrement}>
+                        <Text style={styles.button}>Increment Native</Text>
+                    </Pressable>
+                    <Pressable onPress={onNativeDecrement}>
+                        <Text style={styles.button}>Decrement Native</Text>
+                    </Pressable>
+                    <Pressable onPress={onNativeReset}>
+                        <Text style={styles.button}>Reset Native</Text>
+                    </Pressable>
+                </View>
                 <View style={styles.container}>
                     <Text style={styles.text}>{count}</Text>
                     <Pressable onPressIn={onPressIn} onPressOut={onPressOut}  >
